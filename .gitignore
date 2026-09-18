@@ -1,12 +1,5 @@
-# Python
+.env
+node_modules/
+dist/
 __pycache__/
 *.py[cod]
-.venv/
-venv/
-# Local secrets (see .env.example)
-.env
-# Local data
-*.db
-# OS / editors
-.DS_Store
-.vscode/

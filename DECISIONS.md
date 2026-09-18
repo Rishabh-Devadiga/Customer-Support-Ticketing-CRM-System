@@ -325,6 +325,8 @@ notes ordered by `created_at ASC`.
 - `PUT` with `note` → `INSERT INTO notes`; `PUT` with `status` → `UPDATE tickets`.
   Both in one transaction.
 - Blank `note` (`""` / whitespace-only) is a validation error, not a silent no-op.
+- `PUT` returns exactly `{success: true, updated_at}` per the assessment
+  contract; the client re-fetches the detail for the updated ticket + notes.
 
 ---
 
@@ -599,7 +601,7 @@ Postgres. See `FLOW.md` §8.
 ## DEC-016 — Schema Migration Approach (`create_all` on Startup, No Alembic in V1)
 
 ### Decision
-**Status: PROPOSED during foundation implementation — needs owner approval.**
+**Status: APPROVED — owner review, ticket API milestone.**
 
 Create the two-table schema with SQLAlchemy `Base.metadata.create_all()` at
 application startup (`init_db()` in the lifespan handler). No Alembic or other
@@ -628,3 +630,95 @@ migration tooling in V1.
   and the tables appear.
 - Any future column/table change must switch to versioned migrations; do not
   extend the `create_all`-only approach past V1 if the schema evolves.
+
+---
+
+## DEC-017 — Frontend Scaffold (Vite + React Router + Tailwind v4)
+
+### Decision
+**Status: APPROVED — frontend planning.**
+
+Scaffold with Vite `react-ts`, route with `react-router-dom`
+(`/`, `/tickets/new`, `/tickets/:ticketId`), style with Tailwind v4 via
+`@tailwindcss/vite`. No other frontend libraries in V1.
+
+### Alternatives Considered
+- Create React App (deprecated, slow, no longer maintained).
+- Next.js (SSR framework; overkill for a static SPA and conflicts with the
+  approved Vercel-static deployment in DEC-015).
+- Wouter / TanStack Router (smaller or more powerful, but less familiar to
+  evaluators than react-router).
+
+### Why
+- Vite is the current standard React scaffold: instant dev server, trivial
+  `npm run build`, first-class Vercel support.
+- Deep-linkable routes (`/`, ticket detail) are required by FLOW §4D/§4E, so a
+  real router beats state-only navigation.
+- Tailwind v4 needs no config file and matches DEC-001.
+
+### Tradeoff
+- One extra runtime dependency (react-router-dom). Accepted: routing is
+  required functionality, not a nice-to-have.
+
+### Consequence
+- `frontend/` is the Vite root and later the Vercel project root.
+- Frontend dev server runs on port 5173 (already in backend default
+  `CORS_ORIGINS`).
+
+---
+
+## DEC-018 — API Client (Native Fetch, No Axios)
+
+### Decision
+**Status: APPROVED — frontend planning.**
+
+One small fetch wrapper (`frontend/src/api/client.ts`) with a typed
+`ApiError(status, detail)` parsed from FastAPI's `{detail}` bodies. Four
+endpoint functions matching DEC-004. No Axios.
+
+### Alternatives Considered
+- Axios (interceptors, transforms, wider familiarity).
+- OpenAPI codegen (orval/openapi-typescript-codegen).
+
+### Why
+- Four endpoints with JSON in/out need no interceptors or transforms; ~60
+  lines of fetch cover base URL, methods, and error parsing.
+- Codegen adds a build step and dependency for an API small enough to mirror
+  by hand (types in `types/tickets.ts` match `app/schemas.py` 1:1).
+
+### Tradeoff
+- Hand-mirrored types can drift from backend schemas; mitigated by keeping
+  both shapes minimal and reviewing them together at each milestone.
+
+### Consequence
+- `VITE_API_BASE_URL` is the only runtime config, read once in the client.
+
+---
+
+## DEC-019 — Filter State in URL + Debounce + Abort Stale Requests
+
+### Decision
+**Status: APPROVED — frontend planning.**
+
+Dashboard filter state lives in URL query params (`?search=&status=`,
+`All` = param omitted); search input debounces ~300 ms before committing to
+the URL; every list/detail fetch uses `AbortController` and ignores
+`AbortError` silently.
+
+### Alternatives Considered
+- Component-local filter state (simpler, but breaks FLOW §4D deep-linking).
+- No debounce (a request per keystroke; wasteful and flickery).
+- No abort (last-response-wins race: slow earlier request overwrites newer results).
+
+### Why
+- Implements FLOW §4C/§4D exactly: debounce interval, deep-linkable filters,
+  search AND-composed with status server-side.
+- Abort is the standard fix for out-of-order responses with zero dependencies.
+
+### Tradeoff
+- URL and input can briefly disagree mid-debounce (input shows keystrokes,
+  results follow 300 ms later). Accepted: this is the expected debounced UX.
+
+### Consequence
+- Back/forward, bookmark, and refresh preserve the dashboard view.
+- `AbortError` is swallowed, never shown as an error state.

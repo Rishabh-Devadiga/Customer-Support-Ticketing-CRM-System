@@ -166,8 +166,8 @@ Agent changes status and/or types a note → PUT /api/tickets/{ticket_id}
   {status?: "Open"|"In Progress"|"Closed", note?: "…"} (≥1 required)
   → Backend validates → transaction: UPDATE tickets (+ updated_at=now())
      and/or INSERT INTO notes
-  → 200 + updated ticket with notes[]
-  → Frontend refreshes detail state + list badge
+  → 200 {success: true, updated_at}
+  → Frontend re-fetches ticket detail
 ```
 
 1. Agent uses the status dropdown and/or the "Add note" box on the detail page.
@@ -175,10 +175,11 @@ Agent changes status and/or types a note → PUT /api/tickets/{ticket_id}
    blocked client-side.
 3. Backend: 404 if ticket missing → validate (at least one field; status literal;
    note non-blank) → single transaction updating `tickets` (`updated_at = now()`
-   on **any** change) and inserting the note row if present → return updated
-   ticket with full notes list.
-4. Frontend replaces detail state from the response (no second GET needed) and
-   updates the status badge; failures surface as inline error + unchanged state.
+   on **any** change) and inserting the note row if present → return exactly
+   `{success: true, updated_at}`.
+4. Frontend reads `{success, updated_at}` from the response, then re-fetches
+   the detail (`GET /api/tickets/{ticket_id}`) to refresh state and the status
+   badge; failures surface as inline error + unchanged state.
 
 ---
 
@@ -303,7 +304,12 @@ All bodies are JSON. Timestamps are ISO-8601 UTC strings.
 - **Database interaction:** `UPDATE tickets SET status = …, updated_at = now()`
   (if status given) + `INSERT INTO notes (ticket_fk, content)` (if note given);
   always bumps `updated_at`, even for note-only updates. Re-read ticket + notes.
-- **Response:** `200 OK` — updated ticket with full `notes[]` (same shape as §6.3).
+- **Response:** `200 OK` — exactly:
+  ```json
+  { "success": true, "updated_at": "2026-09-18T11:30:00Z" }
+  ```
+  (Assessment contract: the client re-fetches `GET /api/tickets/{ticket_id}`
+  for the updated ticket + notes.)
 - **Possible errors:** `404` unknown `ticket_id`; `422/400` empty body, invalid
   status, or blank note; `500` DB failure (transaction rolled back).
 

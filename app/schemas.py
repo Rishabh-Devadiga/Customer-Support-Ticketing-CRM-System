@@ -94,3 +94,10 @@ class TicketRead(TicketListItem):
 
 class HealthResponse(BaseModel):
     status: Literal["ok"] = "ok"
+
+
+class TicketUpdateResponse(BaseModel):
+    """PUT /api/tickets/{ticket_id} response: exactly {success, updated_at}."""
+
+    success: bool = True
+    updated_at: datetime
