@@ -1,4 +1,9 @@
 // @vitest-environment happy-dom
+//
+// Self-sufficient: seeds uniquely-tagged rows in beforeAll, so assertions are
+// exact regardless of other rows in the database or parallel test files.
+// After every filter change, tests wait for the URL value AND the rows,
+// because the table stays rendered (stale) while the new fetch is in flight.
 import {
   cleanup,
   fireEvent,
@@ -7,16 +12,52 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeAll, expect, test, vi } from "vitest";
 import {
   RouterProvider,
   createMemoryRouter,
   useParams,
 } from "react-router-dom";
-import { listTickets } from "../api/client";
+import { createTicket, updateTicket } from "../api/client";
+import Layout from "../components/Layout";
 import DashboardPage from "./DashboardPage";
 
 afterEach(cleanup);
+
+const TAG = `p2dash-${Date.now()}`;
+const NAME_A = `P2 Alpha ${TAG}`;
+const NAME_B = `P2 Bravo ${TAG}`;
+const NAME_C = `P2 Charlie ${TAG}`;
+const EMAIL_B = `p2b-${TAG}@example.com`;
+let idA = "";
+let idB = "";
+let idC = "";
+
+beforeAll(async () => {
+  const a = await createTicket({
+    customer_name: NAME_A,
+    customer_email: `p2a-${TAG}@example.com`,
+    subject: `Alpha subject ${TAG}`,
+    description: `seeded ${TAG} row alpha`,
+  });
+  const b = await createTicket({
+    customer_name: NAME_B,
+    customer_email: EMAIL_B,
+    subject: `Bravo subject ${TAG}`,
+    description: `seeded ${TAG} row bravo`,
+  });
+  const c = await createTicket({
+    customer_name: NAME_C,
+    customer_email: `p2c-${TAG}@example.com`,
+    subject: `Charlie subject ${TAG}`,
+    description: `seeded ${TAG} row charlie`,
+  });
+  idA = a.ticket_id;
+  idB = b.ticket_id;
+  idC = c.ticket_id;
+  await updateTicket(idA, { status: "In Progress" });
+  await updateTicket(idC, { status: "Closed", note: "Seed note." });
+}, 30000);
 
 function DetailStub() {
   const { ticketId } = useParams();
@@ -46,23 +87,28 @@ async function rowTicketIds(): Promise<string[]> {
     );
 }
 
-test("loading skeleton, then all tickets newest-first with links", async () => {
-  const seeded = await listTickets({});
-  expect(seeded.length).toBe(3);
+function urlParam(router: ReturnType<typeof renderAt>, key: string) {
+  return new URLSearchParams(router.state.location.search).get(key);
+}
 
+test("loading skeleton, then sorted listing with links", async () => {
   renderAt("/");
   expect(screen.queryByLabelText("Loading tickets")).not.toBeNull();
 
-  expect(await rowTicketIds()).toEqual(seeded.map((t) => t.ticket_id));
-  // Row content: customer, subject, status badge, created date, links.
-  expect(screen.getByText("Rahul Sharma")).not.toBeNull();
-  expect(
-    screen.getByRole("link", { name: seeded[0].ticket_id }),
-  ).not.toBeNull();
-  const href = screen
-    .getByRole("link", { name: seeded[0].ticket_id })
-    .getAttribute("href");
-  expect(href).toBe(`/tickets/${seeded[0].ticket_id}`);
+  const ids = await rowTicketIds();
+  // Tagged rows present, newest-first (C created last).
+  expect(ids.indexOf(idC)).toBeLessThan(ids.indexOf(idB));
+  expect(ids.indexOf(idB)).toBeLessThan(ids.indexOf(idA));
+  // Row content + links, scoped to the tagged row (names repeat across runs).
+  expect(screen.getByText(NAME_B)).not.toBeNull();
+  const link = screen.getByRole("link", { name: idB });
+  expect(link.getAttribute("href")).toBe(`/tickets/${idB}`);
+  const table = await screen.findByRole("table");
+  const rows = within(table).getAllByRole("row").slice(1);
+  const rowText = (id: string) =>
+    rows.find((r) => r.textContent?.includes(id))?.textContent ?? "";
+  expect(rowText(idA)).toContain("In Progress");
+  expect(rowText(idC)).toContain("Closed");
 });
 
 test("search filters server-side and lands in the URL", async () => {
@@ -70,54 +116,73 @@ test("search filters server-side and lands in the URL", async () => {
   await screen.findByRole("table", {}, { timeout: 5000 });
 
   fireEvent.change(screen.getByLabelText("Search tickets"), {
-    target: { value: "jane" },
+    target: { value: EMAIL_B },
+  });
+  await waitFor(() => expect(urlParam(router, "search")).toBe(EMAIL_B), {
+    timeout: 5000,
   });
   await waitFor(
-    () => expect(screen.queryByText("Rahul Sharma")).toBeNull(),
+    async () => expect(await rowTicketIds()).toEqual([idB]),
     { timeout: 5000 },
   );
-  expect(screen.getByText("Jane Doe")).not.toBeNull();
-  expect(router.state.location.search).toContain("search=jane");
 });
 
-test("status filter and combined search+filter", async () => {
+test("status filter isolates tagged rows", async () => {
   const router = renderAt("/");
   await screen.findByRole("table", {}, { timeout: 5000 });
 
   fireEvent.change(screen.getByLabelText("Status"), {
     target: { value: "Closed" },
   });
-  await waitFor(
-    () => expect(screen.queryByText("Jane Doe")).toBeNull(),
-    { timeout: 5000 },
-  );
-  expect(screen.getByText("Rahul Verma")).not.toBeNull();
-  expect(router.state.location.search).toContain("status=Closed");
-
-  fireEvent.change(screen.getByLabelText("Search tickets"), {
-    target: { value: "jane" },
+  await waitFor(() => expect(urlParam(router, "status")).toBe("Closed"), {
+    timeout: 5000,
   });
-  // Combined jane + Closed matches nothing: proves the AND-composed query ran.
+  // Tagged partition: C shows; A/B cannot (wrong status). Untagged leftovers
+  // may add rows, so assert membership, not exact equality.
   await waitFor(
-    () => expect(router.state.location.search).toContain("search=jane"),
+    async () => {
+      const ids = await rowTicketIds();
+      expect(ids).toContain(idC);
+      expect(ids).not.toContain(idA);
+      expect(ids).not.toContain(idB);
+    },
     { timeout: 5000 },
   );
-  await screen.findByText("No tickets match your search.", {}, { timeout: 5000 });
 });
 
-test("All + cleared search remove URL params and restore rows", async () => {
-  const router = renderAt("/?search=rahul&status=Closed");
+test("combined search+filter composes (AND)", async () => {
+  const router = renderAt("/");
+  await screen.findByRole("table", {}, { timeout: 5000 });
+
+  fireEvent.change(screen.getByLabelText("Status"), {
+    target: { value: "Closed" },
+  });
+  fireEvent.change(screen.getByLabelText("Search tickets"), {
+    target: { value: TAG },
+  });
+  // TAG matches all three tagged rows, but only Charlie is Closed.
+  await waitFor(() => expect(urlParam(router, "search")).toBe(TAG), {
+    timeout: 5000,
+  });
+  await waitFor(
+    async () => expect(await rowTicketIds()).toEqual([idC]),
+    { timeout: 5000 },
+  );
+});
+
+test("prefilled URL restores state; All + clear empties params", async () => {
+  const router = renderAt(`/?search=${TAG}&status=Closed`);
   await waitFor(
     () =>
       expect(
         (screen.getByLabelText("Search tickets") as HTMLInputElement).value,
-      ).toBe("rahul"),
+      ).toBe(TAG),
     { timeout: 5000 },
   );
   expect(
     (screen.getByLabelText("Status") as HTMLSelectElement).value,
   ).toBe("Closed");
-  expect(await rowTicketIds()).toHaveLength(1);
+  expect(await rowTicketIds()).toEqual([idC]);
 
   fireEvent.change(screen.getByLabelText("Status"), {
     target: { value: "All" },
@@ -130,7 +195,12 @@ test("All + cleared search remove URL params and restore rows", async () => {
     { timeout: 5000 },
   );
   await waitFor(
-    async () => expect(await rowTicketIds()).toHaveLength(3),
+    async () => {
+      const ids = await rowTicketIds();
+      expect(ids).toContain(idA);
+      expect(ids).toContain(idB);
+      expect(ids).toContain(idC);
+    },
     { timeout: 5000 },
   );
 });
@@ -140,21 +210,90 @@ test("no-results state with working clear action", async () => {
   await screen.findByRole("table", {}, { timeout: 5000 });
 
   fireEvent.change(screen.getByLabelText("Search tickets"), {
-    target: { value: "zzz-no-such-ticket" },
+    target: { value: `${TAG}-zzz-no-match` },
   });
-  await screen.findByText("No tickets match your search.", {}, { timeout: 5000 });
+  // Generous timeout: shared backend is slow under full-suite parallel load.
+  await screen.findByText("No tickets match your search.", {}, { timeout: 10000 });
 
   fireEvent.click(
     screen.getByRole("button", { name: "Clear search & filters" }),
   );
-  expect(await rowTicketIds()).toHaveLength(3);
+  await waitFor(
+    async () => {
+      const ids = await rowTicketIds();
+      expect(ids).toContain(idA);
+      expect(ids).toContain(idB);
+      expect(ids).toContain(idC);
+    },
+    { timeout: 5000 },
+  );
 });
 
 test("ticket link navigates to the detail route", async () => {
-  const seeded = await listTickets({});
   renderAt("/");
   await screen.findByRole("table", {}, { timeout: 5000 });
 
-  fireEvent.click(screen.getByRole("link", { name: seeded[1].ticket_id }));
-  await screen.findByText(`detail:${seeded[1].ticket_id}`, {}, { timeout: 5000 });
+  fireEvent.click(screen.getByRole("link", { name: idB }));
+  await screen.findByText(`detail:${idB}`, {}, { timeout: 5000 });
+});
+
+test("transient first failure is retried silently, then rows load", async () => {
+  const realFetch = globalThis.fetch;
+  let calls = 0;
+  vi.stubGlobal("fetch", (...args: Parameters<typeof fetch>) => {
+    calls += 1;
+    if (calls === 1) return Promise.reject(new TypeError("flaky network"));
+    return realFetch(...args);
+  });
+  try {
+    renderAt("/");
+    expect(await rowTicketIds()).toContain(idA);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(calls).toBeGreaterThanOrEqual(2);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("HTTP error responses are not retried", async () => {
+  let calls = 0;
+  vi.stubGlobal("fetch", () => {
+    calls += 1;
+    return Promise.resolve(
+      new Response(JSON.stringify({ detail: "DB down" }), { status: 500 }),
+    );
+  });
+  try {
+    renderAt("/");
+    await screen.findByRole("alert", {}, { timeout: 5000 });
+    // Past the only attempt: no automatic retries for real responses.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(calls).toBe(1);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+test("exactly one New ticket button (header) on the dashboard", async () => {
+  render(
+    <RouterProvider
+      router={createMemoryRouter(
+        [
+          {
+            path: "/",
+            element: <Layout />,
+            children: [
+              { index: true, element: <DashboardPage /> },
+              { path: "tickets/new", element: <div>new ticket page</div> },
+            ],
+          },
+        ],
+        { initialEntries: ["/"] },
+      )}
+    />,
+  );
+  await screen.findByRole("table", {}, { timeout: 5000 });
+  const links = screen.getAllByRole("link", { name: "New ticket" });
+  expect(links).toHaveLength(1);
+  expect(links[0].getAttribute("href")).toBe("/tickets/new");
 });

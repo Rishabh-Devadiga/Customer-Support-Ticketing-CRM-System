@@ -1,4 +1,7 @@
 // @vitest-environment happy-dom
+//
+// Failure paths with fetch stubbed down: deterministic under plain `npm test`
+// (real dead-port runs already proved this UI in Phases 2-3).
 import {
   cleanup,
   fireEvent,
@@ -12,7 +15,10 @@ import { isAbortError } from "../api/client";
 import ErrorBanner from "../components/ErrorBanner";
 import DashboardPage from "./DashboardPage";
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.unstubAllGlobals();
+  cleanup();
+});
 
 function renderAt(path: string) {
   const router = createMemoryRouter(
@@ -24,15 +30,18 @@ function renderAt(path: string) {
 }
 
 test("connection failure shows error banner and retry re-attempts", async () => {
-  // Runs with VITE_API_BASE_URL pointed at a dead port.
+  vi.stubGlobal(
+    "fetch",
+    () => Promise.reject(new TypeError("network down")),
+  );
   renderAt("/");
-  const alert = await screen.findByRole("alert", {}, { timeout: 8000 });
+  const alert = await screen.findByRole("alert", {}, { timeout: 5000 });
   expect(alert.textContent).toMatch(/Cannot reach the API/);
 
   fireEvent.click(screen.getByRole("button", { name: "Retry" }));
   await waitFor(
     () => expect(screen.queryByRole("alert")).not.toBeNull(),
-    { timeout: 8000 },
+    { timeout: 5000 },
   );
 });
 

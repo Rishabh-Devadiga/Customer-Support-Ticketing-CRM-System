@@ -1,13 +1,7 @@
 import { Link } from "react-router-dom";
 import type { TicketListItem } from "../types/tickets";
+import { formatDate } from "../utils/format";
 import StatusBadge from "./StatusBadge";
-
-export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
 
 interface TicketTableProps {
   tickets: TicketListItem[];

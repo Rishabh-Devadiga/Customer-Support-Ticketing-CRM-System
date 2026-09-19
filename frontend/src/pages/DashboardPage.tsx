@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ApiError, isAbortError, listTickets } from "../api/client";
+import { withTransientRetry } from "../api/retry";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import type { TicketListItem, TicketStatus } from "../types/tickets";
 import { isTicketStatus } from "../types/tickets";
@@ -52,22 +53,30 @@ export default function DashboardPage() {
     const controller = new AbortController();
     setLoading(true);
     setError(null);
-    listTickets(
-      {
-        search: urlSearch === "" ? undefined : urlSearch,
-        status: activeStatus ?? undefined,
-      },
+    // Transient network failures retry automatically with backoff; real API
+    // responses surface immediately. Aborts stay silent (DEC-019).
+    withTransientRetry(
+      (signal) =>
+        listTickets(
+          {
+            search: urlSearch === "" ? undefined : urlSearch,
+            status: activeStatus ?? undefined,
+          },
+          signal,
+        ),
       controller.signal,
     )
-      .then((rows) => setTickets(rows))
+      .then((rows) => {
+        if (controller.signal.aborted) return;
+        setTickets(rows);
+        setLoading(false);
+      })
       .catch((err: unknown) => {
-        if (isAbortError(err)) return; // stale request: silent (DEC-019)
+        if (isAbortError(err) || controller.signal.aborted) return;
         setError(
           err instanceof ApiError ? err.message : "Something went wrong.",
         );
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
+        setLoading(false);
       });
     return () => controller.abort();
   }, [urlSearch, activeStatus, retryCount]);
@@ -81,9 +90,16 @@ export default function DashboardPage() {
     });
   };
 
+  // Clear via state, not by wiping the URL directly: the debounced input still
+  // holds the old query for ~300ms and would re-commit it, resurrecting the
+  // search. Letting the debounce commit the empty input converges cleanly.
   const clearFilters = () => {
     setInput("");
-    setSearchParams({});
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      params.delete("status");
+      return params;
+    });
   };
 
   const isFiltered = urlSearch !== "" || activeStatus !== null;
@@ -91,20 +107,12 @@ export default function DashboardPage() {
 
   return (
     <section aria-labelledby="tickets-heading">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1
-          id="tickets-heading"
-          className="text-2xl font-semibold text-slate-900"
-        >
-          All tickets
-        </h1>
-        <Link
-          to="/tickets/new"
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          New ticket
-        </Link>
-      </div>
+      <h1
+        id="tickets-heading"
+        className="text-2xl font-semibold text-slate-900"
+      >
+        All tickets
+      </h1>
 
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
         <SearchBar ref={inputRef} value={input} onChange={setInput} />

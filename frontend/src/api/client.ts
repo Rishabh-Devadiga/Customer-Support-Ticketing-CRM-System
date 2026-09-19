@@ -16,11 +16,14 @@ export const API_BASE_URL: string | undefined = import.meta.env
 /** HTTP error with the backend's message. `status` 0 means no response reached us. */
 export class ApiError extends Error {
   status: number;
+  /** Raw `detail` payload (string or FastAPI 422 array) for field-level mapping. */
+  detail: unknown;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, detail: unknown = null) {
     super(message);
     this.name = "ApiError";
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -65,7 +68,11 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
     } catch {
       /* non-JSON error body: fall through to the generic message */
     }
-    throw new ApiError(res.status, parseDetail(body, `Request failed (${res.status}).`));
+    throw new ApiError(
+      res.status,
+      parseDetail(body, `Request failed (${res.status}).`),
+      body,
+    );
   }
   return (await res.json()) as T;
 }
