@@ -117,11 +117,24 @@ test("status flows Open to In Progress to Closed with refetch", async () => {
   expect((update as HTMLButtonElement).disabled).toBe(true);
 
   fireEvent.change(statusSelect(), { target: { value: "In Progress" } });
+  // Guard: proceed only once the change has applied (enabled button proves
+  // React state caught up; blind clicks on a disabled button are silent no-ops).
+  await waitFor(
+    () =>
+      expect(
+        (
+          screen.getByRole("button", { name: "Update Status" }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    { timeout: 5000 },
+  );
   fireEvent.click(screen.getByRole("button", { name: "Update Status" }));
   // Server-authoritative: API confirms, then the UI settles (button back).
+  // Gentle polling: the default 50ms interval storms the backend (~160
+  // polls/8s); 500ms is plenty and keeps the shared backend responsive.
   await waitFor(
     async () => expect((await getTicket(idD2)).status).toBe("In Progress"),
-    { timeout: 8000 },
+    { timeout: 8000, interval: 500 },
   );
   await waitFor(
     async () =>
@@ -133,10 +146,19 @@ test("status flows Open to In Progress to Closed with refetch", async () => {
   );
 
   fireEvent.change(statusSelect(), { target: { value: "Closed" } });
+  await waitFor(
+    () =>
+      expect(
+        (
+          screen.getByRole("button", { name: "Update Status" }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    { timeout: 5000 },
+  );
   fireEvent.click(screen.getByRole("button", { name: "Update Status" }));
   await waitFor(
     async () => expect((await getTicket(idD2)).status).toBe("Closed"),
-    { timeout: 8000 },
+    { timeout: 8000, interval: 500 },
   );
 
   const after = await getTicket(idD2);
@@ -231,6 +253,54 @@ test("client supports combined status+note PUT", async () => {
   const after = await getTicket(idD3);
   expect(after.status).toBe("In Progress");
   expect(after.notes.map((n) => n.content)).toContain(`Combo note ${TAG}`);
+});
+
+test("detail shows priority; priority update persists after refresh", async () => {
+  renderAt(`/tickets/${idD1}`);
+  await screen.findByText(`P4 Detail ${TAG}`, {}, { timeout: 8000 });
+  expect(
+    (screen.getByLabelText("Priority") as HTMLSelectElement).value,
+  ).toBe("Medium");
+
+  fireEvent.change(screen.getByLabelText("Priority"), {
+    target: { value: "High" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Update Priority" }));
+  await waitFor(
+    async () => expect((await getTicket(idD1)).priority).toBe("High"),
+    { timeout: 8000, interval: 500 },
+  );
+
+  // Fresh mount reads server state: priority persisted.
+  cleanup();
+  renderAt(`/tickets/${idD1}`);
+  await screen.findByText(`P4 Detail ${TAG}`, {}, { timeout: 8000 });
+  expect(
+    (screen.getByLabelText("Priority") as HTMLSelectElement).value,
+  ).toBe("High");
+}, 30000);
+
+test("priority-only PUT works via the client", async () => {
+  const res = await updateTicket(idD2, { priority: "Low" });
+  expect(res.success).toBe(true);
+  const after = await getTicket(idD2);
+  expect(after.priority).toBe("Low");
+  // Untouched fields preserved (atomic single-row update).
+  expect(after.status).toBe("Closed");
+});
+
+test("combined priority + status + note PUT works via the client", async () => {
+  const note = `All three ${TAG}`;
+  const res = await updateTicket(idD3, {
+    priority: "Urgent",
+    status: "Closed",
+    note,
+  });
+  expect(res.success).toBe(true);
+  const after = await getTicket(idD3);
+  expect(after.priority).toBe("Urgent");
+  expect(after.status).toBe("Closed");
+  expect(after.notes.map((n) => n.content)).toContain(note);
 });
 
 test("unknown ticket shows not-found UI", async () => {

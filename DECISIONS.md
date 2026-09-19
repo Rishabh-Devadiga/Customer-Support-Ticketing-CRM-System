@@ -633,6 +633,53 @@ migration tooling in V1.
 
 ---
 
+## DEC-020 — Ticket Priority (Standout Feature, Phase 6)
+
+### Decision
+**Status: APPROVED — Phase 6 specification (Low/Medium/High/Urgent, default Medium).**
+
+- Store `priority` as `VARCHAR NOT NULL DEFAULT 'Medium'` with a `CHECK`
+  constraint, mirroring the status representation (DEC-007): same Pydantic
+  `Literal` + TypeScript union pattern, same strict-422-on-invalid behavior.
+- New tickets default to `Medium` (Pydantic default on omitted field); `PUT`
+  accepts `priority` alone or combined with `status`/`note` in the same atomic
+  transaction; `GET` list/detail include `priority`; list supports an optional
+  `?priority=` filter AND-composed with `search`/`status`, with the dashboard
+  keeping it in URL state like the status filter (DEC-019).
+- Existing tables are migrated by an idempotent startup `ALTER TABLE …
+  ADD COLUMN IF NOT EXISTS … NOT NULL DEFAULT 'Medium'` plus a guarded
+  `CHECK`/`INDEX` creation in `init_db()`. `create_all` never alters tables,
+  so the migration (not the model alone) is what upgrades deployed databases;
+  existing rows are backfilled to `Medium` with zero data loss and no wipe.
+
+### Alternatives Considered
+- One-off manual SQL run by the deployer (works once, but a fresh/stale
+  environment mismatch silently reappears; startup migration is self-healing).
+- Introducing Alembic just for this column (disproportionate for one additive,
+  backward-compatible column; DEC-016 stays in force).
+- Integer priority codes (less readable across DB/API/UI; rejected per DEC-007
+  reasoning).
+
+### Why
+- Priority is explicitly specified as an optional standout feature with fixed
+  values and a Medium default — the string + CHECK + Literal + union stack is
+  the proven pattern already used for status, so reviewers see one idiom twice
+  instead of two idioms once.
+- Startup migration preserves the assessment's "easy deployment" (no extra
+  deploy step) while respecting that `create_all` cannot ALTER.
+
+### Tradeoff
+- Same as DEC-016: a future *breaking* schema change still needs real
+  versioned migrations; additive columns via guarded ALTERs scale only so far.
+
+### Consequence
+- Deploy needs no migration step for priority either: start the API and
+  existing tickets become `Medium` in place.
+- Frontend treats `priority` exactly like `status` (badge, filter, updater)
+  with its own literals and blue→red severity colors.
+
+---
+
 ## DEC-017 — Frontend Scaffold (Vite + React Router + Tailwind v4)
 
 ### Decision

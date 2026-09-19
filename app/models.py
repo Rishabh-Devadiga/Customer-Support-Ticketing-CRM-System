@@ -20,6 +20,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database import Base
 
 TICKET_STATUSES = ("Open", "In Progress", "Closed")
+TICKET_PRIORITIES = ("Low", "Medium", "High", "Urgent")
 
 
 class Ticket(Base):
@@ -31,7 +32,12 @@ class Ticket(Base):
             "status IN ('Open', 'In Progress', 'Closed')",
             name="ck_tickets_status",
         ),
+        CheckConstraint(
+            "priority IN ('Low', 'Medium', 'High', 'Urgent')",
+            name="ck_tickets_priority",
+        ),
         Index("ix_tickets_status", "status"),
+        Index("ix_tickets_priority", "priority"),
         Index("ix_tickets_created_at", "created_at"),
     )
 
@@ -45,6 +51,9 @@ class Ticket(Base):
     description: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, default="Open", server_default="Open"
+    )
+    priority: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="Medium", server_default="Medium"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

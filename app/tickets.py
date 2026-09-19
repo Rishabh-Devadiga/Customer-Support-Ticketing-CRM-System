@@ -19,7 +19,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import TICKET_STATUSES, Note, Ticket
+from app.models import TICKET_PRIORITIES, TICKET_STATUSES, Note, Ticket
 from app.schemas import (
     TicketCreate,
     TicketListItem,
@@ -70,6 +70,7 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> Ticke
             subject=payload.subject,
             description=payload.description,
             status="Open",
+            priority=payload.priority,
         )
         db.add(ticket)
         try:
@@ -90,9 +91,10 @@ def create_ticket(payload: TicketCreate, db: Session = Depends(get_db)) -> Ticke
 def list_tickets(
     status: str | None = None,
     search: str | None = None,
+    priority: str | None = None,
     db: Session = Depends(get_db),
 ) -> list[Ticket]:
-    """List tickets newest-first, with optional server-side status/search (DEC-010/011)."""
+    """List tickets newest-first, with optional server-side filters (DEC-010/011/020)."""
     stmt = select(Ticket)
     if status is not None:
         if status not in TICKET_STATUSES:
@@ -101,6 +103,13 @@ def list_tickets(
                 detail=f"Invalid status. Must be one of: {', '.join(TICKET_STATUSES)}.",
             )
         stmt = stmt.where(Ticket.status == status)
+    if priority is not None:
+        if priority not in TICKET_PRIORITIES:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid priority. Must be one of: {', '.join(TICKET_PRIORITIES)}.",
+            )
+        stmt = stmt.where(Ticket.priority == priority)
     if search is not None and search.strip():
         pattern = f"%{_escape_like(search.strip())}%"
         stmt = stmt.where(
@@ -128,12 +137,14 @@ def update_ticket(
 ) -> TicketUpdateResponse:
     """Update status and/or append a note atomically (DEC-008).
 
-    Pydantic rejects empty bodies, invalid statuses, and blank notes (422)
-    before this runs. ``updated_at`` is bumped on every update.
+    Pydantic rejects empty bodies, invalid statuses/priorities, and blank
+    notes (422) before this runs. ``updated_at`` is bumped on every update.
     """
     ticket = _get_ticket_or_404(db, ticket_id)
     if payload.status is not None:
         ticket.status = payload.status
+    if payload.priority is not None:
+        ticket.priority = payload.priority
     if payload.note is not None:
         db.add(Note(ticket_fk=ticket.id, content=payload.note))
     ticket.updated_at = datetime.now(timezone.utc)

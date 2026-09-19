@@ -7,10 +7,11 @@ import {
   updateTicket,
 } from "../api/client";
 import { withTransientRetry } from "../api/retry";
-import type { Ticket, TicketStatus } from "../types/tickets";
+import type { Ticket, TicketPriority, TicketStatus } from "../types/tickets";
 import ErrorBanner from "../components/ErrorBanner";
 import NoteComposer from "../components/NoteComposer";
 import NoteTimeline from "../components/NoteTimeline";
+import PriorityUpdater from "../components/PriorityUpdater";
 import StatusUpdater from "../components/StatusUpdater";
 import TicketInfo from "../components/TicketInfo";
 
@@ -36,10 +37,13 @@ export default function TicketDetailPage() {
 
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [statusError, setStatusError] = useState<string | null>(null);
+  const [priorityUpdating, setPriorityUpdating] = useState(false);
+  const [priorityError, setPriorityError] = useState<string | null>(null);
   const [noteAdding, setNoteAdding] = useState(false);
   const [noteError, setNoteError] = useState<string | null>(null);
   // Ref guards: rapid double-clicks must not send duplicate PUTs (state lags).
   const statusUpdatingRef = useRef(false);
+  const priorityUpdatingRef = useRef(false);
   const noteAddingRef = useRef(false);
 
   useEffect(() => {
@@ -93,8 +97,27 @@ export default function TicketDetailPage() {
     }
   };
 
-  const handleAddNote = async (note: string): Promise<boolean> => {
-    if (!ticketId || noteAddingRef.current) return false;
+  const handlePriorityUpdate = async (
+    priority: TicketPriority,
+  ): Promise<boolean> => {
+    if (!ticketId || priorityUpdatingRef.current) return false;
+    priorityUpdatingRef.current = true;
+    setPriorityUpdating(true);
+    setPriorityError(null);
+    try {
+      await updateTicket(ticketId, { priority });
+      refetch(); // UI refreshes from the server response, never faked (FLOW §4F).
+      return true;
+    } catch (err: unknown) {
+      setPriorityError(messageFor(err)); // selection preserved (untouched).
+      return false;
+    } finally {
+      priorityUpdatingRef.current = false;
+      setPriorityUpdating(false);
+    }
+  };
+
+  const handleAddNote = async (note: string): Promise<boolean> => {    if (!ticketId || noteAddingRef.current) return false;
     noteAddingRef.current = true;
     setNoteAdding(true);
     setNoteError(null);
@@ -156,6 +179,12 @@ export default function TicketDetailPage() {
               updating={statusUpdating}
               error={statusError}
               onUpdate={handleStatusUpdate}
+            />
+            <PriorityUpdater
+              current={ticket.priority}
+              updating={priorityUpdating}
+              error={priorityError}
+              onUpdate={handlePriorityUpdate}
             />
             <div>
               <h2 className="mb-2 text-lg font-semibold text-slate-900">

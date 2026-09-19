@@ -162,17 +162,19 @@ Agent clicks ticket → route /tickets/{ticket_id}
 ### F. Update Ticket (Change Status and/or Add Note)
 
 ```text
-Agent changes status and/or types a note → PUT /api/tickets/{ticket_id}
-  {status?: "Open"|"In Progress"|"Closed", note?: "…"} (≥1 required)
+Agent changes status/priority and/or types a note → PUT /api/tickets/{ticket_id}
+  {status?: "Open"|"In Progress"|"Closed", note?: "…",
+   priority?: "Low"|"Medium"|"High"|"Urgent"} (≥1 required)
   → Backend validates → transaction: UPDATE tickets (+ updated_at=now())
      and/or INSERT INTO notes
   → 200 {success: true, updated_at}
   → Frontend re-fetches ticket detail
 ```
 
-1. Agent uses the status dropdown and/or the "Add note" box on the detail page.
-2. Frontend sends one `PUT` containing `status` and/or `note`. Blank notes are
-   blocked client-side.
+1. Agent uses the status dropdown, priority dropdown, and/or the "Add note"
+   box on the detail page.
+2. Frontend sends one `PUT` containing `status` and/or `note` and/or `priority`.
+   Blank notes are blocked client-side.
 3. Backend: 404 if ticket missing → validate (at least one field; status literal;
    note non-blank) → single transaction updating `tickets` (`updated_at = now()`
    on **any** change) and inserting the note row if present → return exactly
@@ -198,7 +200,9 @@ tickets (1) ─────< (N) notes
   subject             │      no edit/delete). Ordered created_at ASC.
   description         │
   status (CHECK)      │      List view reads tickets only.
-  created_at          │      Detail view reads ticket + its notes.
+  priority (CHECK,    │      Detail view reads ticket + its notes.
+    default 'Medium') │
+  created_at          │
   updated_at          │
 ```
 
@@ -211,10 +215,13 @@ Key rules:
 - `notes.ticket_fk → tickets.id ON DELETE CASCADE` — deleting a ticket removes
   its notes (no orphan rows). No separate ticket-delete endpoint in V1.
 - `tickets.status` is CHECK-constrained to `Open | In Progress | Closed`.
-- `updated_at` changes on **every** `PUT` (status change and/or note append).
-  `created_at` never changes.
+- `tickets.priority` (`Low | Medium | High | Urgent`, default `Medium`) has a
+  matching CHECK + index; added to existing tables by an idempotent startup
+  migration that backfills `Medium` without touching other data (DEC-020).
+- `updated_at` changes on **every** `PUT` (status/priority change and/or note
+  append). `created_at` never changes.
 - Indexes: `tickets(ticket_id)` unique, `tickets(status)`,
-  `tickets(created_at DESC)`, `notes(ticket_fk)`.
+  `tickets(priority)`, `tickets(created_at DESC)`, `notes(ticket_fk)`.
 
 ---
 
@@ -231,13 +238,15 @@ All bodies are JSON. Timestamps are ISO-8601 UTC strings.
     "customer_name": "Jane Doe",
     "customer_email": "jane@example.com",
     "subject": "Cannot reset password",
-    "description": "Reset link never arrives…"
+    "description": "Reset link never arrives…",
+    "priority": "High"
   }
   ```
-  (`status` is not accepted on create; client-sent `id`/`ticket_id`/timestamps
-  are ignored.)
+  (`status` is not accepted on create; `priority` is optional, defaults to
+  `Medium`. Client-sent `id`/`ticket_id`/timestamps are ignored.)
 - **Backend processing:** Pydantic validation (all four required, non-blank;
-  email format) → generate unique `ticket_id` → default `status = "Open"`.
+  email format; `priority` literal if given) → generate unique `ticket_id` →
+  default `status = "Open"`, `priority = "Medium"` unless given.
 - **Database interaction:** single `INSERT INTO tickets (...)`.
 - **Response:** `201 Created`
   ```json
@@ -249,25 +258,27 @@ All bodies are JSON. Timestamps are ISO-8601 UTC strings.
     "subject": "Cannot reset password",
     "description": "Reset link never arrives…",
     "status": "Open",
+    "priority": "High",
     "created_at": "2026-09-18T10:00:00Z",
     "updated_at": "2026-09-18T10:00:00Z",
     "notes": []
   }
   ```
-- **Possible errors:** `422/400` missing/blank field, invalid email;
-  `500` DB failure (generic message).
+- **Possible errors:** `422/400` missing/blank field, invalid email, invalid
+  `priority`; `500` DB failure (generic message).
 
-### 6.2 `GET /api/tickets` — List tickets (search + filter)
+### 6.2 `GET /api/tickets` — List tickets (search + filters)
 
-- **Request:** `GET /api/tickets?search=<q>&status=<Open|In Progress|Closed>`
-  (both optional; omit `status` = all).
+- **Request:** `GET /api/tickets?search=<q>&status=<Open|In Progress|Closed>&priority=<Low|Medium|High|Urgent>`
+  (all optional; omitted `status`/`priority` = all).
 - **Backend processing:** trim `search` (blank = ignore); strict-check `status`
-  literal; build one parameterized query (search-across-5-fields AND status),
-  `ORDER BY created_at DESC`. No pagination in V1.
+  and `priority` literals; build one parameterized query
+  (search-across-5-fields AND status AND priority), `ORDER BY created_at DESC`.
+  No pagination in V1.
 - **Database interaction:** single `SELECT` on `tickets` (no notes join).
 - **Response:** `200 OK` — array of ticket objects **without** `notes`
-  (same shape as §6.1 minus `notes`).
-- **Possible errors:** `422/400` invalid `status`; `500` DB failure.
+  (same shape as §6.1 minus `notes`, priority included).
+- **Possible errors:** `422/400` invalid `status` or `priority`; `500` DB failure.
   (Search never 404s — zero matches = `200 []`.)
 
 ### 6.3 `GET /api/tickets/{ticket_id}` — Ticket detail + notes
@@ -282,6 +293,7 @@ All bodies are JSON. Timestamps are ISO-8601 UTC strings.
     "id": 1, "ticket_id": "TKT-7KQ2XA",
     "customer_name": "Jane Doe", "customer_email": "jane@example.com",
     "subject": "…", "description": "…", "status": "In Progress",
+    "priority": "High",
     "created_at": "2026-09-18T10:00:00Z",
     "updated_at": "2026-09-18T11:30:00Z",
     "notes": [
@@ -291,19 +303,21 @@ All bodies are JSON. Timestamps are ISO-8601 UTC strings.
   ```
 - **Possible errors:** `404` unknown `ticket_id`; `500` DB failure.
 
-### 6.4 `PUT /api/tickets/{ticket_id}` — Update status and/or add note
+### 6.4 `PUT /api/tickets/{ticket_id}` — Update status/priority and/or add note
 
 - **Request:** `PUT /api/tickets/TKT-7KQ2XA` — at least one field required:
   ```json
   { "status": "In Progress", "note": "Reproduced the issue, escalating." }
   ```
-  (`status`-only, `note`-only, or both are all valid. Blank/whitespace-only
-  `note` is invalid. Unknown fields ignored or rejected per schema strictness.)
-- **Backend processing:** 404 check → validate (`status` literal; `note`
-  non-blank; ≥1 field present) → single transaction.
-- **Database interaction:** `UPDATE tickets SET status = …, updated_at = now()`
-  (if status given) + `INSERT INTO notes (ticket_fk, content)` (if note given);
-  always bumps `updated_at`, even for note-only updates. Re-read ticket + notes.
+  (`status`-only, `note`-only, `priority`-only, or any combination are valid.
+  Blank/whitespace-only `note` is invalid. Unknown fields ignored or rejected
+  per schema strictness.)
+- **Backend processing:** 404 check → validate (`status`/`priority` literals;
+  `note` non-blank; ≥1 field present) → single transaction.
+- **Database interaction:** `UPDATE tickets SET status = …, priority = …,
+  updated_at = now()` (for fields given) + `INSERT INTO notes (ticket_fk,
+  content)` (if note given); always bumps `updated_at`, even for note-only
+  updates. Re-read ticket + notes.
 - **Response:** `200 OK` — exactly:
   ```json
   { "success": true, "updated_at": "2026-09-18T11:30:00Z" }

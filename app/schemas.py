@@ -17,6 +17,7 @@ from pydantic import (
 )
 
 TicketStatus = Literal["Open", "In Progress", "Closed"]
+TicketPriority = Literal["Low", "Medium", "High", "Urgent"]
 
 
 class NoteRead(BaseModel):
@@ -34,6 +35,7 @@ class TicketCreate(BaseModel):
     customer_email: EmailStr = Field(max_length=254)
     subject: str = Field(min_length=1, max_length=200)
     description: str = Field(min_length=1, max_length=10000)
+    priority: TicketPriority = "Medium"
 
     @field_validator("customer_name", "subject", "description", mode="before")
     @classmethod
@@ -48,10 +50,11 @@ class TicketCreate(BaseModel):
 
 
 class TicketUpdate(BaseModel):
-    """PUT /api/tickets/{ticket_id} body: ``status`` and/or ``note`` (≥1 required)."""
+    """PUT /api/tickets/{ticket_id} body: ``status``/``note``/``priority`` (≥1 required)."""
 
     status: Optional[TicketStatus] = None
     note: Optional[str] = Field(default=None, max_length=10000)
+    priority: Optional[TicketPriority] = None
 
     @field_validator("note")
     @classmethod
@@ -65,8 +68,8 @@ class TicketUpdate(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> "TicketUpdate":
-        if self.status is None and self.note is None:
-            raise ValueError("Provide at least one of 'status' or 'note'.")
+        if self.status is None and self.note is None and self.priority is None:
+            raise ValueError("Provide at least one of 'status', 'note' or 'priority'.")
         return self
 
 
@@ -82,6 +85,7 @@ class TicketListItem(BaseModel):
     subject: str
     description: str
     status: str
+    priority: str
     created_at: datetime
     updated_at: datetime
 

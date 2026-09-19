@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import type { TicketListItem } from "../types/tickets";
 import { formatDate } from "../utils/format";
+import PriorityBadge from "./PriorityBadge";
 import StatusBadge from "./StatusBadge";
 
 interface TicketTableProps {
@@ -28,6 +29,9 @@ export default function TicketTable({ tickets, dimmed }: TicketTableProps) {
             </th>
             <th scope="col" className="px-4 py-2 font-medium text-slate-600">
               Status
+            </th>
+            <th scope="col" className="px-4 py-2 font-medium text-slate-600">
+              Priority
             </th>
             <th scope="col" className="px-4 py-2 font-medium text-slate-600">
               Created
@@ -64,6 +68,9 @@ export default function TicketTable({ tickets, dimmed }: TicketTableProps) {
                 </td>
                 <td className="px-4 py-2">
                   <StatusBadge status={ticket.status} />
+                </td>
+                <td className="px-4 py-2">
+                  <PriorityBadge priority={ticket.priority} />
                 </td>
                 <td className="px-4 py-2 whitespace-nowrap text-slate-600">
                   {formatDate(ticket.created_at)}

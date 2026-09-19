@@ -4,8 +4,12 @@ import { ApiError, isAbortError, listTickets } from "../api/client";
 import { withTransientRetry } from "../api/retry";
 import { useDebouncedValue } from "../hooks/useDebouncedValue";
 import type { TicketListItem, TicketStatus } from "../types/tickets";
-import { isTicketStatus } from "../types/tickets";
+import { isTicketPriority, isTicketStatus } from "../types/tickets";
+import type { TicketPriority } from "../types/tickets";
 import ErrorBanner from "../components/ErrorBanner";
+import PriorityFilter, {
+  type PriorityFilterValue,
+} from "../components/PriorityFilter";
 import SearchBar from "../components/SearchBar";
 import StatusFilter, {
   type StatusFilterValue,
@@ -19,6 +23,10 @@ export default function DashboardPage() {
   const statusParam = searchParams.get("status") ?? "";
   const activeStatus: TicketStatus | null = isTicketStatus(statusParam)
     ? statusParam
+    : null;
+  const priorityParam = searchParams.get("priority") ?? "";
+  const activePriority: TicketPriority | null = isTicketPriority(priorityParam)
+    ? priorityParam
     : null;
 
   // Search box echoes keystrokes instantly; the debounced value commits to the URL.
@@ -61,6 +69,7 @@ export default function DashboardPage() {
           {
             search: urlSearch === "" ? undefined : urlSearch,
             status: activeStatus ?? undefined,
+            priority: activePriority ?? undefined,
           },
           signal,
         ),
@@ -79,13 +88,22 @@ export default function DashboardPage() {
         setLoading(false);
       });
     return () => controller.abort();
-  }, [urlSearch, activeStatus, retryCount]);
+  }, [urlSearch, activeStatus, activePriority, retryCount]);
 
   const handleStatusChange = (value: StatusFilterValue) => {
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
       if (value === "All") params.delete("status");
       else params.set("status", value);
+      return params;
+    });
+  };
+
+  const handlePriorityChange = (value: PriorityFilterValue) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      if (value === "All") params.delete("priority");
+      else params.set("priority", value);
       return params;
     });
   };
@@ -98,11 +116,13 @@ export default function DashboardPage() {
     setSearchParams((prev) => {
       const params = new URLSearchParams(prev);
       params.delete("status");
+      params.delete("priority");
       return params;
     });
   };
 
-  const isFiltered = urlSearch !== "" || activeStatus !== null;
+  const isFiltered =
+    urlSearch !== "" || activeStatus !== null || activePriority !== null;
   const count = tickets === null ? 0 : tickets.length;
 
   return (
@@ -119,6 +139,10 @@ export default function DashboardPage() {
         <StatusFilter
           value={activeStatus ?? "All"}
           onChange={handleStatusChange}
+        />
+        <PriorityFilter
+          value={activePriority ?? "All"}
+          onChange={handlePriorityChange}
         />
       </div>
 

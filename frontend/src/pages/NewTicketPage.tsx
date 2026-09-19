@@ -16,6 +16,7 @@ const UNTOUCHED: FieldTouched = {
   customer_email: false,
   subject: false,
   description: false,
+  priority: false,
 };
 
 const KNOWN_FIELDS: (keyof TicketFormValues)[] = [

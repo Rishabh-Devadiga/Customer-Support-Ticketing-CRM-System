@@ -57,6 +57,8 @@ beforeAll(async () => {
   idC = c.ticket_id;
   await updateTicket(idA, { status: "In Progress" });
   await updateTicket(idC, { status: "Closed", note: "Seed note." });
+  await updateTicket(idA, { priority: "High" });
+  await updateTicket(idC, { priority: "Urgent" });
 }, 30000);
 
 function DetailStub() {
@@ -296,4 +298,70 @@ test("exactly one New ticket button (header) on the dashboard", async () => {
   const links = screen.getAllByRole("link", { name: "New ticket" });
   expect(links).toHaveLength(1);
   expect(links[0].getAttribute("href")).toBe("/tickets/new");
+});
+
+test("priority filter isolates tagged rows and lands in the URL", async () => {
+  const router = renderAt("/");
+  await screen.findByRole("table", {}, { timeout: 5000 });
+
+  fireEvent.change(screen.getByLabelText("Priority"), {
+    target: { value: "High" },
+  });
+  await waitFor(() => expect(urlParam(router, "priority")).toBe("High"), {
+    timeout: 5000,
+  });
+  // Tagged partition: A is High; B/C cannot be. Untagged leftovers may add
+  // rows, so assert membership, not exact equality.
+  await waitFor(
+    async () => {
+      const ids = await rowTicketIds();
+      expect(ids).toContain(idA);
+      expect(ids).not.toContain(idB);
+      expect(ids).not.toContain(idC);
+    },
+    { timeout: 5000 },
+  );
+});
+
+test("priority composes with search and status (AND)", async () => {
+  const router = renderAt("/");
+  await screen.findByRole("table", {}, { timeout: 5000 });
+
+  fireEvent.change(screen.getByLabelText("Priority"), {
+    target: { value: "Urgent" },
+  });
+  fireEvent.change(screen.getByLabelText("Search tickets"), {
+    target: { value: TAG },
+  });
+  // TAG matches all three tagged rows, but only Charlie is Urgent.
+  await waitFor(() => expect(urlParam(router, "priority")).toBe("Urgent"), {
+    timeout: 5000,
+  });
+  await waitFor(() => expect(urlParam(router, "search")).toBe(TAG), {
+    timeout: 5000,
+  });
+  // waitFor: the table still shows pre-search rows while the new fetch flies.
+  await waitFor(
+    async () => expect(await rowTicketIds()).toEqual([idC]),
+    { timeout: 8000 },
+  );
+
+  fireEvent.change(screen.getByLabelText("Status"), {
+    target: { value: "Open" },
+  });
+  // None of the tagged rows is Open+Urgent: proves the third clause applied.
+  await waitFor(() => expect(urlParam(router, "status")).toBe("Open"), {
+    timeout: 5000,
+  });
+  await screen.findByText("No tickets match your search.", {}, { timeout: 8000 });
+});
+
+test("priority column renders badges in the table", async () => {
+  renderAt("/");
+  const table = await screen.findByRole("table", {}, { timeout: 5000 });
+  const rows = within(table).getAllByRole("row").slice(1);
+  const rowText = (id: string) =>
+    rows.find((r) => r.textContent?.includes(id))?.textContent ?? "";
+  expect(rowText(idA)).toContain("High");
+  expect(rowText(idC)).toContain("Urgent");
 });

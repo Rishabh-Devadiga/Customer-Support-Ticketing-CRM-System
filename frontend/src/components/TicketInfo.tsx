@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { Ticket } from "../types/tickets";
+import PriorityBadge from "./PriorityBadge";
 import StatusBadge from "./StatusBadge";
 import { formatDate } from "../utils/format";
 
@@ -19,7 +20,10 @@ export default function TicketInfo({ ticket }: { ticket: Ticket }) {
         <h1 className="font-mono text-xl font-semibold text-slate-900">
           {ticket.ticket_id}
         </h1>
-        <StatusBadge status={ticket.status} />
+        <div className="flex items-center gap-2">
+          <PriorityBadge priority={ticket.priority} />
+          <StatusBadge status={ticket.status} />
+        </div>
       </div>
       <dl className="mt-4 flex flex-col gap-3">
         <Row label="Customer">{ticket.customer_name}</Row>

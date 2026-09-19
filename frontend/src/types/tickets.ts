@@ -8,6 +8,21 @@ export function isTicketStatus(value: string): value is TicketStatus {
   return (TICKET_STATUSES as string[]).includes(value);
 }
 
+export type TicketPriority = "Low" | "Medium" | "High" | "Urgent";
+
+export const TICKET_PRIORITIES: TicketPriority[] = [
+  "Low",
+  "Medium",
+  "High",
+  "Urgent",
+];
+
+export const DEFAULT_PRIORITY: TicketPriority = "Medium";
+
+export function isTicketPriority(value: string): value is TicketPriority {
+  return (TICKET_PRIORITIES as string[]).includes(value);
+}
+
 export interface Note {
   id: number;
   content: string;
@@ -23,6 +38,7 @@ export interface TicketListItem {
   subject: string;
   description: string;
   status: TicketStatus;
+  priority: TicketPriority;
   created_at: string;
   updated_at: string;
 }
@@ -38,12 +54,15 @@ export interface CreateTicketInput {
   customer_email: string;
   subject: string;
   description: string;
+  /** Omitted → server defaults to Medium. */
+  priority?: TicketPriority;
 }
 
-/** PUT /api/tickets/{ticket_id} body: status and/or note (at least one). */
+/** PUT /api/tickets/{ticket_id} body: status and/or note and/or priority (≥1). */
 export interface UpdateTicketInput {
   status?: TicketStatus;
   note?: string;
+  priority?: TicketPriority;
 }
 
 /** PUT response: exactly { success, updated_at }. */

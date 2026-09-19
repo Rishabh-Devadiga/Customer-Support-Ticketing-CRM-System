@@ -78,7 +78,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export function listTickets(
-  params: { search?: string; status?: string },
+  params: { search?: string; status?: string; priority?: string },
   signal?: AbortSignal,
 ): Promise<TicketListItem[]> {
   const query = new URLSearchParams();
@@ -87,6 +87,9 @@ export function listTickets(
   }
   if (params.status) {
     query.set("status", params.status);
+  }
+  if (params.priority) {
+    query.set("priority", params.priority);
   }
   const suffix = query.toString();
   return api<TicketListItem[]>(`/api/tickets${suffix ? `?${suffix}` : ""}`, {

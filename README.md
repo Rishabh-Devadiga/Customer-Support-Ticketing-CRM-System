@@ -79,10 +79,10 @@ Base URL from `VITE_API_BASE_URL`. Timestamps are ISO-8601 UTC.
 
 | Method | Path | Purpose | Success |
 |---|---|---|---|
-| `POST` | `/api/tickets` | Create (no `status` accepted; always `Open`, server `TKT-XXXXXX` id) | `201` ticket |
-| `GET` | `/api/tickets` | List newest-first; `?search=` (5 fields) + `?status=` (exact literal) | `200` array |
+| `POST` | `/api/tickets` | Create (no `status` accepted; always `Open`, server `TKT-XXXXXX` id; optional `priority`, defaults `Medium`) | `201` ticket |
+| `GET` | `/api/tickets` | List newest-first; `?search=` (5 fields) + `?status=` / `?priority=` (exact literals, AND-composed) | `200` array |
 | `GET` | `/api/tickets/{ticket_id}` | Detail with notes oldest-first | `200` ticket / `404` |
-| `PUT` | `/api/tickets/{ticket_id}` | `{status?, note?}` (≥1, atomic, bumps `updated_at`) | `200 {success, updated_at}` |
+| `PUT` | `/api/tickets/{ticket_id}` | `{status?, note?, priority?}` (≥1, atomic, bumps `updated_at`) | `200 {success, updated_at}` |
 | `GET` | `/health` | Liveness / deploy smoke test | `200 {status: ok}` |
 
 Errors use `{"detail": ...}`: `422` validation, `404` unknown ticket,

@@ -129,3 +129,43 @@ test("backend 422 detail maps to fields", () => {
   const empty = mapDetailToFieldErrors("nope");
   expect(empty).toEqual({ fieldErrors: {}, formError: null });
 });
+
+test("priority defaults to Medium on the form and the ticket", async () => {
+  const email = `phase6-def-${Date.now()}@example.com`;
+  renderAt("/tickets/new");
+  expect(
+    (screen.getByLabelText("Priority") as HTMLSelectElement).value,
+  ).toBe("Medium");
+  fillValid(email);
+
+  const submit = screen.getByRole("button", { name: "Create ticket" });
+  await waitFor(
+    () => expect((submit as HTMLButtonElement).disabled).toBe(false),
+    { timeout: 5000 },
+  );
+  fireEvent.click(submit);
+
+  const detail = await screen.findByText(/^detail:TKT-/, {}, { timeout: 8000 });
+  const createdId = (detail.textContent ?? "").replace("detail:", "");
+  expect((await getTicket(createdId)).priority).toBe("Medium");
+}, 20000);
+
+test("explicit priority creation works", async () => {
+  const email = `phase6-exp-${Date.now()}@example.com`;
+  renderAt("/tickets/new");
+  fillValid(email);
+  fireEvent.change(screen.getByLabelText("Priority"), {
+    target: { value: "Urgent" },
+  });
+
+  const submit = screen.getByRole("button", { name: "Create ticket" });
+  await waitFor(
+    () => expect((submit as HTMLButtonElement).disabled).toBe(false),
+    { timeout: 5000 },
+  );
+  fireEvent.click(submit);
+
+  const detail = await screen.findByText(/^detail:TKT-/, {}, { timeout: 8000 });
+  const createdId = (detail.textContent ?? "").replace("detail:", "");
+  expect((await getTicket(createdId)).priority).toBe("Urgent");
+}, 20000);
