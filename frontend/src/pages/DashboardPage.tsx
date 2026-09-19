@@ -127,23 +127,39 @@ export default function DashboardPage() {
 
   return (
     <section aria-labelledby="tickets-heading">
-      <h1
-        id="tickets-heading"
-        className="text-2xl font-semibold text-slate-900"
-      >
-        All tickets
-      </h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1
+            id="tickets-heading"
+            className="text-2xl font-bold tracking-tight text-slate-900 sm:text-[28px]"
+          >
+            All tickets
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Track, search, and manage customer support tickets.
+          </p>
+        </div>
+        {tickets !== null && tickets.length > 0 && (
+          <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 ring-1 ring-blue-600/20 ring-inset">
+            {count} {count === 1 ? "ticket" : "tickets"}
+          </span>
+        )}
+      </div>
 
-      <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
-        <SearchBar ref={inputRef} value={input} onChange={setInput} />
-        <StatusFilter
-          value={activeStatus ?? "All"}
-          onChange={handleStatusChange}
-        />
-        <PriorityFilter
-          value={activePriority ?? "All"}
-          onChange={handlePriorityChange}
-        />
+      <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+          <SearchBar ref={inputRef} value={input} onChange={setInput} />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <StatusFilter
+              value={activeStatus ?? "All"}
+              onChange={handleStatusChange}
+            />
+            <PriorityFilter
+              value={activePriority ?? "All"}
+              onChange={handlePriorityChange}
+            />
+          </div>
+        </div>
       </div>
 
       <div className="mt-4" aria-live="polite">
@@ -156,8 +172,24 @@ export default function DashboardPage() {
           />
         ) : tickets !== null && tickets.length === 0 ? (
           isFiltered ? (
-            <div className="rounded border border-slate-200 bg-white p-8 text-center">
-              <p className="font-medium text-slate-900">
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
+              <div
+                aria-hidden="true"
+                className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-slate-100"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  className="h-5 w-5 text-slate-400"
+                >
+                  <path
+                    d="M9 3.5a5.5 5.5 0 1 0 3.24 9.97l3.14 3.14a.75.75 0 0 0 1.06-1.06l-3.14-3.14A5.5 5.5 0 0 0 9 3.5Z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  />
+                </svg>
+              </div>
+              <p className="mt-3 font-semibold text-slate-900">
                 No tickets match your search.
               </p>
               <p className="mt-1 text-sm text-slate-500">
@@ -166,32 +198,45 @@ export default function DashboardPage() {
               <button
                 type="button"
                 onClick={clearFilters}
-                className="mt-4 rounded border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="mt-4 rounded-lg border border-slate-300 bg-white px-4 py-1.5 text-sm font-semibold text-slate-700 shadow-xs transition-colors hover:bg-slate-50"
               >
                 Clear search &amp; filters
               </button>
             </div>
           ) : (
-            <div className="rounded border border-slate-200 bg-white p-8 text-center">
-              <p className="font-medium text-slate-900">No tickets yet.</p>
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
+              <div
+                aria-hidden="true"
+                className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-blue-50"
+              >
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  className="h-5 w-5 text-blue-500"
+                >
+                  <path
+                    d="M10 4v8m0 0 3-3m-3 3-3-3M4 16.5h12"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <p className="mt-3 font-semibold text-slate-900">No tickets yet.</p>
               <p className="mt-1 text-sm text-slate-500">
                 Create the first support ticket to get started.
               </p>
               <Link
                 to="/tickets/new"
-                className="mt-4 inline-block rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                className="mt-4 inline-block rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
               >
                 Create ticket
               </Link>
             </div>
           )
         ) : (
-          <>
-            <p className="mb-2 text-sm text-slate-500">
-              {count} {count === 1 ? "ticket" : "tickets"}
-            </p>
-            <TicketTable tickets={tickets ?? []} dimmed={loading} />
-          </>
+          <TicketTable tickets={tickets ?? []} dimmed={loading} />
         )}
       </div>
     </section>

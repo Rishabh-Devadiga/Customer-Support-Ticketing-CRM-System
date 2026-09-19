@@ -17,9 +17,23 @@ import TicketInfo from "../components/TicketInfo";
 
 function TicketDetailSkeleton() {
   return (
-    <div role="status" aria-label="Loading ticket" className="flex flex-col gap-4">
-      <div className="h-48 animate-pulse rounded border border-slate-200 bg-white" />
-      <div className="h-24 animate-pulse rounded border border-slate-200 bg-white" />
+    <div
+      role="status"
+      aria-label="Loading ticket"
+      className="flex flex-col gap-4"
+    >
+      <div className="animate-pulse rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="h-6 w-40 rounded bg-slate-200" />
+        <div className="mt-4 flex flex-col gap-3">
+          {[0, 1, 2].map((row) => (
+            <div key={row} className="h-4 animate-pulse rounded bg-slate-100" />
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="h-28 animate-pulse rounded-xl border border-slate-200 bg-white shadow-sm" />
+        <div className="h-28 animate-pulse rounded-xl border border-slate-200 bg-white shadow-sm" />
+      </div>
       <span className="sr-only">Loading ticket…</span>
     </div>
   );
@@ -135,8 +149,11 @@ export default function TicketDetailPage() {
   };
 
   return (
-    <section aria-labelledby="ticket-detail-heading">
-      <Link to="/" className="text-sm text-blue-600 hover:underline">
+    <section aria-labelledby="ticket-detail-heading" className="mx-auto max-w-4xl">
+      <Link
+        to="/"
+        className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-800 hover:underline"
+      >
         &larr; Back to all tickets
       </Link>
 
@@ -145,10 +162,10 @@ export default function TicketDetailPage() {
           <TicketDetailSkeleton />
         ) : error !== null ? (
           error.status === 404 ? (
-            <div className="rounded border border-slate-200 bg-white p-8 text-center">
+            <div className="rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm sm:p-10">
               <h1
                 id="ticket-detail-heading"
-                className="text-xl font-semibold text-slate-900"
+                className="text-xl font-bold tracking-tight text-slate-900"
               >
                 Ticket not found
               </h1>
@@ -157,7 +174,7 @@ export default function TicketDetailPage() {
               </p>
               <Link
                 to="/"
-                className="mt-4 inline-block rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+                className="mt-4 inline-block rounded-lg bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700"
               >
                 Back to tickets
               </Link>
@@ -169,28 +186,30 @@ export default function TicketDetailPage() {
             />
           )
         ) : ticket !== null ? (
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 sm:gap-5">
             <span id="ticket-detail-heading" className="sr-only">
               Ticket {ticket.ticket_id}
             </span>
             <TicketInfo ticket={ticket} />
-            <StatusUpdater
-              current={ticket.status}
-              updating={statusUpdating}
-              error={statusError}
-              onUpdate={handleStatusUpdate}
-            />
-            <PriorityUpdater
-              current={ticket.priority}
-              updating={priorityUpdating}
-              error={priorityError}
-              onUpdate={handlePriorityUpdate}
-            />
+            <div className="grid gap-4 sm:grid-cols-2 sm:gap-5">
+              <StatusUpdater
+                current={ticket.status}
+                updating={statusUpdating}
+                error={statusError}
+                onUpdate={handleStatusUpdate}
+              />
+              <PriorityUpdater
+                current={ticket.priority}
+                updating={priorityUpdating}
+                error={priorityError}
+                onUpdate={handlePriorityUpdate}
+              />
+            </div>
             <div>
-              <h2 className="mb-2 text-lg font-semibold text-slate-900">
+              <h2 className="mb-3 text-lg font-bold tracking-tight text-slate-900">
                 Notes ({ticket.notes.length})
               </h2>
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-4">
                 <NoteTimeline notes={ticket.notes} />
                 <NoteComposer
                   adding={noteAdding}

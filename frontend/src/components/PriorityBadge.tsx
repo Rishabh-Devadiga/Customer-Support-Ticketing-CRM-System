@@ -1,10 +1,13 @@
 import type { TicketPriority } from "../types/tickets";
 
-const STYLES: Record<TicketPriority, string> = {
-  Low: "bg-slate-100 text-slate-700",
-  Medium: "bg-blue-100 text-blue-800",
-  High: "bg-amber-100 text-amber-800",
-  Urgent: "bg-red-100 text-red-800",
+const STYLES: Record<TicketPriority, { pill: string; dot: string }> = {
+  Low: { pill: "bg-slate-100 text-slate-600 ring-slate-500/20", dot: "bg-slate-400" },
+  Medium: { pill: "bg-sky-50 text-sky-700 ring-sky-600/20", dot: "bg-sky-500" },
+  High: {
+    pill: "bg-orange-50 text-orange-700 ring-orange-600/25",
+    dot: "bg-orange-500",
+  },
+  Urgent: { pill: "bg-rose-50 text-rose-700 ring-rose-600/25", dot: "bg-rose-500" },
 };
 
 export default function PriorityBadge({
@@ -12,10 +15,12 @@ export default function PriorityBadge({
 }: {
   priority: TicketPriority;
 }) {
+  const style = STYLES[priority];
   return (
     <span
-      className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium whitespace-nowrap ${STYLES[priority]}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold whitespace-nowrap ring-1 ring-inset ${style.pill}`}
     >
+      <span aria-hidden="true" className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
       {priority}
     </span>
   );

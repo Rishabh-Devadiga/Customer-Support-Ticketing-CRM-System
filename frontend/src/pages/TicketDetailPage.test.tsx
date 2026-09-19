@@ -75,6 +75,29 @@ function statusSelect() {
   return screen.getByLabelText("Status") as HTMLSelectElement;
 }
 
+/**
+ * Change a select then click its update button, tolerating a swallowed
+ * change event: re-fire until the DOM value AND the enabled button prove
+ * React state caught up. A blind click on a disabled button is a silent
+ * no-op, which used to surface as a mysterious downstream timeout.
+ */
+async function chooseAndConfirm(label: string, value: string, button: string) {
+  await waitFor(
+    () => {
+      const select = screen.getByLabelText(label) as HTMLSelectElement;
+      fireEvent.change(select, { target: { value } });
+      expect(select.value).toBe(value);
+      expect(
+        (
+          screen.getByRole("button", { name: button }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false);
+    },
+    { timeout: 8000 },
+  );
+  fireEvent.click(screen.getByRole("button", { name: button }));
+}
+
 test("loads and displays all ticket information", async () => {
   renderAt(`/tickets/${idD1}`);
   expect(screen.queryByLabelText("Loading ticket")).not.toBeNull();
@@ -116,19 +139,7 @@ test("status flows Open to In Progress to Closed with refetch", async () => {
   const update = screen.getByRole("button", { name: "Update Status" });
   expect((update as HTMLButtonElement).disabled).toBe(true);
 
-  fireEvent.change(statusSelect(), { target: { value: "In Progress" } });
-  // Guard: proceed only once the change has applied (enabled button proves
-  // React state caught up; blind clicks on a disabled button are silent no-ops).
-  await waitFor(
-    () =>
-      expect(
-        (
-          screen.getByRole("button", { name: "Update Status" }) as HTMLButtonElement
-        ).disabled,
-      ).toBe(false),
-    { timeout: 5000 },
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Update Status" }));
+  await chooseAndConfirm("Status", "In Progress", "Update Status");
   // Server-authoritative: API confirms, then the UI settles (button back).
   // Gentle polling: the default 50ms interval storms the backend (~160
   // polls/8s); 500ms is plenty and keeps the shared backend responsive.
@@ -145,17 +156,7 @@ test("status flows Open to In Progress to Closed with refetch", async () => {
     { timeout: 8000 },
   );
 
-  fireEvent.change(statusSelect(), { target: { value: "Closed" } });
-  await waitFor(
-    () =>
-      expect(
-        (
-          screen.getByRole("button", { name: "Update Status" }) as HTMLButtonElement
-        ).disabled,
-      ).toBe(false),
-    { timeout: 5000 },
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Update Status" }));
+  await chooseAndConfirm("Status", "Closed", "Update Status");
   await waitFor(
     async () => expect((await getTicket(idD2)).status).toBe("Closed"),
     { timeout: 8000, interval: 500 },
@@ -262,10 +263,7 @@ test("detail shows priority; priority update persists after refresh", async () =
     (screen.getByLabelText("Priority") as HTMLSelectElement).value,
   ).toBe("Medium");
 
-  fireEvent.change(screen.getByLabelText("Priority"), {
-    target: { value: "High" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "Update Priority" }));
+  await chooseAndConfirm("Priority", "High", "Update Priority");
   await waitFor(
     async () => expect((await getTicket(idD1)).priority).toBe("High"),
     { timeout: 8000, interval: 500 },

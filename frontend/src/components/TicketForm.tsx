@@ -103,15 +103,15 @@ function Field({
   const error = errors[field];
   const errorId = `${field}-error`;
   const shared =
-    "w-full rounded border bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:ring-1 focus:outline-none " +
+    "w-full rounded-lg border bg-white px-3.5 py-2.5 text-sm text-slate-900 shadow-xs placeholder:text-slate-400 focus:ring-2 focus:outline-none " +
     (error
-      ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-      : "border-slate-300 focus:border-blue-500 focus:ring-blue-500");
+      ? "border-red-400 focus:border-red-500 focus:ring-red-100"
+      : "border-slate-300 focus:border-blue-500 focus:ring-blue-100");
   return (
     <div>
       <label
         htmlFor={field}
-        className="mb-1 block text-sm font-medium text-slate-700"
+        className="mb-1.5 block text-sm font-semibold text-slate-700"
       >
         {label}
       </label>
@@ -142,7 +142,15 @@ function Field({
         />
       )}
       {error && (
-        <p id={errorId} className="mt-1 text-sm text-red-600">
+        <p id={errorId} className="mt-1.5 flex items-center gap-1 text-sm text-red-600">
+          <svg aria-hidden="true" viewBox="0 0 16 16" fill="none" className="h-3.5 w-3.5 shrink-0">
+            <path
+              d="M8 5.5v3.5m0 2.5v.01M14.5 8A6.5 6.5 0 1 1 1.5 8a6.5 6.5 0 0 1 13 0Z"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
           {error}
         </p>
       )}
@@ -161,7 +169,7 @@ export default function TicketForm({
   onSubmit,
 }: TicketFormProps) {
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-5">
       <Field
         field="customer_name"
         label="Customer Name"
@@ -199,7 +207,7 @@ export default function TicketForm({
       <div>
         <label
           htmlFor="priority"
-          className="mb-1 block text-sm font-medium text-slate-700"
+          className="mb-1.5 block text-sm font-semibold text-slate-700"
         >
           Priority
         </label>
@@ -215,7 +223,7 @@ export default function TicketForm({
           onBlur={() => onBlurField("priority")}
           aria-invalid={errors.priority ? true : undefined}
           aria-describedby={errors.priority ? "priority-error" : undefined}
-          className="rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 focus:outline-none"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm font-medium text-slate-900 shadow-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none sm:w-auto sm:min-w-56"
         >
           {TICKET_PRIORITIES.map((priority) => (
             <option key={priority} value={priority}>
@@ -224,19 +232,22 @@ export default function TicketForm({
           ))}
         </select>
         {errors.priority && (
-          <p id="priority-error" className="mt-1 text-sm text-red-600">
+          <p id="priority-error" className="mt-1.5 text-sm text-red-600">
             {errors.priority}
           </p>
         )}
       </div>
-      <div>
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-100 pt-5 sm:flex-row sm:items-center">
         <button
           type="submit"
           disabled={submitting || !isValid}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
         >
           {submitting ? "Creating…" : submitLabel}
         </button>
+        <p className="text-xs text-slate-500 sm:ml-1">
+          New tickets always start with status Open.
+        </p>
       </div>
     </form>
   );

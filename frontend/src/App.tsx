@@ -6,8 +6,10 @@ import TicketDetailPage from "./pages/TicketDetailPage";
 
 function NotFoundPage() {
   return (
-    <section>
-      <h1 className="text-2xl font-semibold text-slate-900">Page not found</h1>
+    <section className="mx-auto max-w-lg rounded-xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+      <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+        Page not found
+      </h1>
       <p className="mt-2 text-sm text-slate-500">
         The page you are looking for does not exist.
       </p>
